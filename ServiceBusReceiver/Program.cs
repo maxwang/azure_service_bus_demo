@@ -1,4 +1,5 @@
 ﻿using Microsoft.Azure.ServiceBus;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Text;
 using System.Threading;
@@ -8,7 +9,7 @@ namespace ServiceBusReceiver
 {
     class Program
     {
-        const string ServiceBusConnectionString = "Endpoint=sb://edmorder.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=qdClUmM1r1mUtPJKkAOPeY/1O1OhChLJSPEs2QjhWr8=";
+        
         const string QueueName = "edm.order.zohocrm.job";
         static IQueueClient queueClient;
 
@@ -19,7 +20,18 @@ namespace ServiceBusReceiver
 
         static async Task MainAsync()
         {
-            queueClient = new QueueClient(ServiceBusConnectionString, QueueName);
+            var environmentName = Environment.GetEnvironmentVariable("CORE_ENVIRONMENT");
+
+            var builder = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{environmentName}.json", optional: true);
+
+            var configuration = builder.Build();
+
+            var serviceBusConnectionString = configuration["ServiceBusConnectionString"];
+
+            queueClient = new QueueClient(serviceBusConnectionString, QueueName);
             RegisterOnMessageHandlerAndReceiveMessages();
 
             Console.ReadKey();
@@ -50,6 +62,11 @@ namespace ServiceBusReceiver
             // Process the message.
             Console.WriteLine($"Received message: SequenceNumber:{message.SystemProperties.SequenceNumber} Body:{Encoding.UTF8.GetString(message.Body)}");
 
+            if(message.UserProperties.ContainsKey("OrderId"))
+            {
+                Console.WriteLine($"Order id: { message.UserProperties["OrderId"] }");
+            }
+            
             // Complete the message so that it is not received again.
             // This can be done only if the queue Client is created in ReceiveMode.PeekLock mode (which is the default).
             await queueClient.CompleteAsync(message.SystemProperties.LockToken);

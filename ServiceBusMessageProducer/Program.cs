@@ -1,4 +1,5 @@
 ﻿using Microsoft.Azure.ServiceBus;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Text;
 using System.Threading.Tasks;
@@ -7,7 +8,7 @@ namespace ServiceBusMessageProducer
 {
     class Program
     {
-        const string ServiceBusConnectionString = "Endpoint=sb://edmorder.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=qdClUmM1r1mUtPJKkAOPeY/1O1OhChLJSPEs2QjhWr8=";
+        
         const string QueueName = "edm.order.zohocrm.job";
         static IQueueClient queueClient;
         static void Main(string[] args)
@@ -17,14 +18,26 @@ namespace ServiceBusMessageProducer
 
         static async Task MainAsync()
         {
-            queueClient = new QueueClient(ServiceBusConnectionString, QueueName);
+            var environmentName = Environment.GetEnvironmentVariable("CORE_ENVIRONMENT");
 
-            await queueClient.SendAsync(new Message(Encoding.UTF8.GetBytes("5005")));
+            var builder = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{environmentName}.json", optional: true);
+
+            var configuration = builder.Build();
+
+            var serviceBusConnectionString = configuration["ServiceBusConnectionString"];
+            queueClient = new QueueClient(serviceBusConnectionString, QueueName);
+
+            var message = new Message();
+            message.UserProperties.Add("OrderId", "9005");
+            message.Body = Encoding.UTF8.GetBytes("5005");
+            
+            await queueClient.SendAsync(message);
 
             Console.ReadKey();
-
-
-
+            
             await queueClient.CloseAsync();
         }
     }
